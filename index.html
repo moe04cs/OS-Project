@@ -1,0 +1,606 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Best-Fit Memory Simulator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"
+    />
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              bg: "#121212",
+              surface: "#1e1e1e",
+              border: "#333333",
+              fg: "#e0e0e0",
+              muted: "#aaaaaa",
+              success: "#10b981" /* Emerald */,
+              primary: "#3b82f6" /* Blue */,
+              danger: "#ef4444",
+            },
+            fontFamily: { body: ['"IBM Plex Sans"', "sans-serif"] },
+          },
+        },
+      };
+    </script>
+    <style>
+      body {
+        font-family: "IBM Plex Sans", sans-serif;
+        background: #121212;
+        color: #e0e0e0;
+        margin: 0;
+        padding: 10px;
+      }
+      * {
+        box-sizing: border-box;
+      }
+
+      /* Responsive Layout */
+      .grid-container {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 20px;
+        max-width: 1000px;
+        margin: 0 auto;
+      }
+      @media (min-width: 768px) {
+        .grid-container {
+          grid-template-columns: 1fr 1fr;
+        }
+      }
+
+      /* Memory Blocks */
+      .mb {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 14px;
+        font-size: 14px;
+        border-left: 5px solid #333;
+        border-bottom: 1px solid #333;
+        background: #1e1e1e;
+        transition: all 0.2s ease;
+      }
+      .mb.os {
+        border-color: #666;
+        color: #aaa;
+      }
+      .mb.proc {
+        border-color: #3b82f6;
+        color: #fff;
+        font-weight: 600;
+      }
+      .mb.free {
+        background: transparent;
+        border-left-style: dashed;
+        border-color: #444;
+        color: #888;
+      }
+      .mb.pick {
+        background: rgba(16, 185, 129, 0.15);
+        border-color: #10b981;
+        color: #10b981;
+      }
+      .mb.fail {
+        background: rgba(239, 68, 68, 0.15);
+        border-color: #ef4444;
+        color: #ef4444;
+      }
+      .mb.scan {
+        background: rgba(255, 255, 255, 0.05);
+      }
+
+      .frag {
+        font-size: 11px;
+        color: #ef4444;
+        margin-left: 8px;
+        font-weight: 400;
+      }
+
+      /* Activity Log */
+      .log {
+        background: #0a0a0a;
+        border: 1px solid #333;
+        padding: 15px;
+        height: 250px;
+        overflow-y: auto;
+        font-size: 13px;
+        font-family: "Courier New", monospace;
+        border-radius: 8px;
+      }
+      .le {
+        padding: 6px 0;
+        border-bottom: 1px solid #222;
+      }
+
+      /* Inputs & Buttons */
+      .inp {
+        background: #1a1a1a;
+        border: 2px solid #333;
+        padding: 10px 14px;
+        color: #fff;
+        font-size: 14px;
+        border-radius: 8px;
+        outline: none;
+        transition: border-color 0.2s;
+      }
+      .inp:focus {
+        border-color: #3b82f6;
+      }
+
+      .btn {
+        padding: 12px 20px;
+        font-size: 14px;
+        font-weight: 700;
+        cursor: pointer;
+        border: none;
+        border-radius: 8px;
+        background: #2a2a2a;
+        color: #fff;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        transition: all 0.15s active;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+      .btn:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 6px 12px -2px rgba(0, 0, 0, 0.3);
+        filter: brightness(1.1);
+      }
+      .btn:active {
+        transform: translateY(1px);
+      }
+      .btn:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+        transform: none;
+        box-shadow: none;
+      }
+
+      .btn-primary {
+        background: #3b82f6;
+      }
+      .btn-success {
+        background: #10b981;
+      }
+
+      /* UI Elements */
+      .chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 12px;
+        font-size: 12px;
+        background: #2a2a2a;
+        border-radius: 20px;
+        margin: 4px;
+        border: 1px solid #444;
+      }
+      .chip .x {
+        cursor: pointer;
+        color: #ef4444;
+        font-weight: bold;
+      }
+
+      .st {
+        text-align: center;
+        padding: 15px;
+        background: #1e1e1e;
+        border: 1px solid #333;
+        border-radius: 12px;
+      }
+      .st .v {
+        font-size: 18px;
+        font-weight: 800;
+        color: #3b82f6;
+      }
+      .st .l {
+        font-size: 10px;
+        color: #888;
+        text-transform: uppercase;
+        margin-top: 4px;
+      }
+    </style>
+  </head>
+  <body>
+    <div style="max-width: 1000px; margin: 0 auto; padding: 10px">
+      <!-- Top Section: Input and Stats -->
+      <div class="grid-container" style="margin-bottom: 20px">
+        <!-- Controls -->
+        <div
+          style="
+            background: #1e1e1e;
+            padding: 20px;
+            border-radius: 12px;
+            border: 1px solid #333;
+          "
+        >
+          <div
+            style="
+              margin-bottom: 12px;
+              color: #888;
+              font-size: 12px;
+              font-weight: 700;
+              text-transform: uppercase;
+            "
+          >
+            <i class="fa-solid fa-plus-circle mr-1"></i> Configure Process
+          </div>
+          <div
+            style="
+              display: flex;
+              flex-wrap: wrap;
+              gap: 10px;
+              margin-bottom: 15px;
+            "
+          >
+            <input
+              type="text"
+              class="inp"
+              id="pname"
+              value="P3"
+              style="width: 80px"
+            />
+            <input
+              type="number"
+              class="inp"
+              id="psize"
+              placeholder="Size (KB)"
+              style="flex: 1; min-width: 100px"
+              min="1"
+            />
+            <button
+              class="btn btn-primary"
+              onclick="addQ()"
+              style="width: 100%"
+            >
+              Add to Queue
+            </button>
+          </div>
+
+          <div
+            style="
+              margin-top: 25px;
+              margin-bottom: 10px;
+              color: #888;
+              font-size: 12px;
+              font-weight: 700;
+              text-transform: uppercase;
+            "
+          >
+            Pending Queue <span id="qcount" style="color: #3b82f6">(0)</span>
+          </div>
+          <div
+            id="qdisp"
+            style="
+              min-height: 50px;
+              margin-bottom: 15px;
+              border: 1px dashed #444;
+              border-radius: 8px;
+              padding: 10px;
+            "
+          ></div>
+
+          <button
+            class="btn btn-success"
+            id="bnext"
+            onclick="goNext()"
+            disabled
+            style="width: 100%; height: 50px"
+          >
+            <i class="fa-solid fa-play mr-2"></i> Run Next Allocation
+          </button>
+        </div>
+
+        <!-- Stats Grid -->
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px">
+          <div class="st">
+            <div class="v" id="sFree">0 KB</div>
+            <div class="l">Available</div>
+          </div>
+          <div class="st">
+            <div class="v" id="sHoles">0</div>
+            <div class="l">Blocks</div>
+          </div>
+          <div class="st">
+            <div class="v" id="sLarge">0 KB</div>
+            <div class="l">Largest</div>
+          </div>
+          <div class="st" style="border-color: #ef4444">
+            <div class="v" id="sFrag" style="color: #ef4444">0 KB</div>
+            <div class="l">Fragmentaion</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Bottom Section: Memory and Log -->
+      <div class="grid-container">
+        <!-- Memory Display -->
+        <div>
+          <div
+            style="
+              margin-bottom: 12px;
+              color: #888;
+              font-size: 12px;
+              font-weight: 700;
+              text-transform: uppercase;
+            "
+          >
+            <i class="fa-solid fa-memory mr-1"></i> Live RAM Layout
+          </div>
+          <div
+            id="memdisp"
+            style="border: 1px solid #333; border-radius: 8px; overflow: hidden"
+          ></div>
+        </div>
+
+        <!-- Log -->
+        <div>
+          <div
+            style="
+              margin-bottom: 12px;
+              color: #888;
+              font-size: 12px;
+              font-weight: 700;
+              text-transform: uppercase;
+            "
+          >
+            <i class="fa-solid fa-terminal mr-1"></i> Execution History
+          </div>
+          <div class="log" id="logbox">
+            <div class="le" style="color: #666">
+              System ready for allocation...
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      /* [Keep existing JavaScript logic from original file here] */
+      var TOTAL = 1024,
+        memory = [],
+        queue = [],
+        busy = false,
+        nextId = 3;
+      function init() {
+        memory = [
+          { id: 0, size: 128, ps: 128 },
+          { id: 1, size: 150, ps: 150 },
+          { id: -1, size: 120, ps: 0 },
+          { id: 2, size: 200, ps: 200 },
+          { id: -1, size: 100, ps: 0 },
+          { id: -1, size: 150, ps: 0 },
+          { id: -1, size: 176, ps: 0 },
+        ];
+      }
+      function render() {
+        var h = "";
+        for (var i = 0; i < memory.length; i++) {
+          var b = memory[i],
+            cls = b.id === -1 ? "free" : b.id === 0 ? "os" : "proc",
+            lbl = "",
+            fg = "";
+          if (b.id === -1) lbl = "Empty Block";
+          else if (b.id === 0) lbl = "OS Kernel";
+          else {
+            lbl = "P" + b.id;
+            var f = b.size - b.ps;
+            if (f > 0) fg = '<span class="frag">Wasted: ' + f + " KB</span>";
+          }
+          h +=
+            '<div class="mb ' +
+            cls +
+            '" id="m' +
+            i +
+            '"><span>' +
+            lbl +
+            fg +
+            "</span><span style='opacity:0.7'>" +
+            b.size +
+            " KB</span></div>";
+        }
+        document.getElementById("memdisp").innerHTML = h;
+      }
+      function renderQ() {
+        var c = document.getElementById("qdisp"),
+          n = document.getElementById("qcount");
+        n.textContent = "(" + queue.length + ")";
+        if (!queue.length) {
+          c.innerHTML =
+            '<span style="color:#666;font-size:13px;display:block;text-align:center;">Empty</span>';
+        } else {
+          var h = "";
+          for (var i = 0; i < queue.length; i++) {
+            h +=
+              '<div class="chip">' +
+              queue[i].n +
+              " (" +
+              queue[i].s +
+              ' KB) <span class="x" onclick="rmQ(' +
+              i +
+              ')">×</span></div>';
+          }
+          c.innerHTML = h;
+        }
+        document.getElementById("bnext").disabled = !queue.length || busy;
+      }
+      function stats() {
+        var tf = 0,
+          h = 0,
+          lg = 0,
+          fr = 0;
+        for (var i = 0; i < memory.length; i++) {
+          if (memory[i].id === -1) {
+            tf += memory[i].size;
+            h++;
+            if (memory[i].size > lg) lg = memory[i].size;
+          } else fr += memory[i].size - memory[i].ps;
+        }
+        document.getElementById("sFree").textContent = tf + " KB";
+        document.getElementById("sHoles").textContent = h;
+        document.getElementById("sLarge").textContent = lg + " KB";
+        document.getElementById("sFrag").textContent = fr + " KB";
+      }
+      function lg(msg, c) {
+        var b = document.getElementById("logbox"),
+          d = document.createElement("div");
+        d.className = "le";
+        if (c) d.style.color = c;
+        d.innerHTML = msg;
+        b.appendChild(d);
+        b.scrollTop = b.scrollHeight;
+      }
+      function clrHL() {
+        for (var i = 0; i < memory.length; i++) {
+          var e = document.getElementById("m" + i);
+          if (e) e.className = e.className.replace(/ scan| pick| fail/g, "");
+        }
+      }
+      function hl(idxs, cls) {
+        idxs.forEach(function (i) {
+          var e = document.getElementById("m" + i);
+          if (e) e.classList.add(cls);
+        });
+      }
+      function addQ() {
+        var ni = document.getElementById("pname"),
+          si = document.getElementById("psize");
+        var nm = ni.value.trim(),
+          sz = parseInt(si.value);
+        if (!nm || !sz || sz <= 0) return;
+        queue.push({ n: nm, s: sz, id: nextId++ });
+        lg("Added " + nm + " (" + sz + " KB) to queue.");
+        renderQ();
+        var num = nm.replace("P", "");
+        if (!isNaN(num)) ni.value = "P" + (parseInt(num) + 1);
+        si.value = "";
+        si.focus();
+      }
+      function rmQ(i) {
+        queue.splice(i, 1);
+        renderQ();
+      }
+      function bf(sz) {
+        var bi = -1,
+          mw = TOTAL + 1,
+          cands = [];
+        for (var i = 0; i < memory.length; i++) {
+          if (memory[i].id === -1 && memory[i].size >= sz) {
+            var w = memory[i].size - sz;
+            cands.push({ i: i, sz: memory[i].size, w: w });
+            if (w < mw) {
+              mw = w;
+              bi = i;
+            }
+          }
+        }
+        return { bi: bi, mw: mw, cands: cands };
+      }
+      function compact() {
+        var act = [],
+          used = 0;
+        for (var i = 0; i < memory.length; i++) {
+          if (memory[i].id !== -1) {
+            act.push({
+              id: memory[i].id,
+              size: memory[i].ps,
+              ps: memory[i].ps,
+            });
+            used += memory[i].ps;
+          }
+        }
+        memory = act;
+        var f = TOTAL - used;
+        if (f > 0) memory.push({ id: -1, size: f, ps: 0 });
+      }
+      function wait(ms) {
+        return new Promise(function (r) {
+          setTimeout(r, ms);
+        });
+      }
+      async function goNext() {
+        if (busy || !queue.length) return;
+        busy = true;
+        var p = queue.shift();
+        renderQ();
+        clrHL();
+        lg("--- Allocating " + p.n + " (" + p.s + " KB) ---");
+        var r = bf(p.s);
+        hl(
+          r.cands.map(function (c) {
+            return c.i;
+          }),
+          "scan",
+        );
+        await wait(500);
+        if (r.bi !== -1) {
+          clrHL();
+          hl([r.bi], "pick");
+          lg("Selected block index " + r.bi, "#10b981");
+          await wait(600);
+          memory[r.bi].id = p.id;
+          memory[r.bi].ps = p.s;
+          clrHL();
+          render();
+          stats();
+          busy = false;
+          renderQ();
+        } else {
+          clrHL();
+          hl(
+            r.cands.map(function (c) {
+              return c.i;
+            }),
+            "fail",
+          );
+          lg("Failed: No single block large enough.", "#ef4444");
+          await wait(1000);
+          clrHL();
+          lg("Triggering compaction...", "#888");
+          await wait(500);
+          compact();
+          render();
+          stats();
+          var r2 = bf(p.s);
+          if (r2.bi !== -1) {
+            hl([r2.bi], "pick");
+            await wait(600);
+            memory[r2.bi].id = p.id;
+            memory[r2.bi].ps = p.s;
+            clrHL();
+            render();
+            stats();
+            lg("Success after compaction.", "#10b981");
+          } else {
+            lg("Fatal: Out of memory.", "#ef4444");
+          }
+          busy = false;
+          renderQ();
+        }
+      }
+      document
+        .getElementById("psize")
+        .addEventListener("keydown", function (e) {
+          if (e.key === "Enter") addQ();
+        });
+      init();
+      render();
+      renderQ();
+      stats();
+    </script>
+  </body>
+</html>
